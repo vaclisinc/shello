@@ -4,7 +4,8 @@
 
 ## 功能
 
-- **SSH 終端機**：用 [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 渲染（xterm-256color、滑鼠、bracketed paste），鍵盤上方有 `esc` / `ctrl` / `tab` / 方向鍵 / `^B`（herdr prefix）/ `^C` / 貼上。
+- **SSH 終端機**：用 [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 渲染（xterm-256color、滑鼠、bracketed paste），鍵盤上方有 `esc`、黏滯修飾鍵 `⇧` / `ctrl` / `alt`（點一下只套用到下一個鍵，連點兩下鎖定）、`⇧tab`、`⇧⏎`、方向鍵、home/end/pgup/pgdn、`^B`（herdr prefix）、`^C`、貼上。herdr 啟用 kitty 鍵盤協定時會用 CSI u 編碼送出組合鍵，所以 Shift+Enter、Shift+Tab 等能正確傳到 Claude Code / Codex。
+- **免費、無次數限制**：沒有用量上限或訂閱。
 - **自動開 herdr**：連線後自動執行 `herdr`（啟動或 reattach）。herdr 本身會在伺服器上保留 session，所以斷線、換網路、App 被系統砍掉之後，回到前景會自動重連並接回原本的畫面 —— 這是 Moshi 用 mosh 做到的體驗，這裡靠 herdr 的持久 session 達成。
 - **Agents 收件匣**：另開一條 SSH exec channel 定期跑 `herdr api snapshot`，列出所有 agent，依急迫程度排序（blocked → done → working → idle）。
 - **不用進終端機就能回應 agent**：讀取 agent 最近輸出（`herdr agent read`）、一鍵 Approve / 1 / 2 / 3 / Reject（`herdr agent send-keys`）、直接送 prompt（`herdr agent prompt`）、或跳到該 pane（`herdr agent focus`）。
