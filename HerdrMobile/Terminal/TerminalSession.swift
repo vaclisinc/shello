@@ -62,27 +62,37 @@ final class TerminalSession: ObservableObject, Identifiable {
         if let updated = app.hosts.hosts.first(where: { $0.id == profile.id }) {
             profile = updated
         }
-        let profile = self.profile
         let knownHosts = app.knownHosts
-
+        // Built outside the Task: nesting this closure inside it crashes the
+        // Swift 6.1 optimizer (ClosureLifetimeFixup).
+        let confirm: TOFUHostKeyValidator.Confirm = { [weak app] challenge in
+            await app?.confirmHostKey(challenge) ?? false
+        }
         shellTask = Task { [weak self] in
-            do {
-                let connection = try await SSHConnection.connect(
-                    profile: profile,
-                    knownHosts: knownHosts,
-                    confirmHostKey: { challenge in await app.confirmHostKey(challenge) }
-                )
-                guard let self, !Task.isCancelled else { await connection.close(); return }
-                self.connection = connection
-                self.state = .connected
-                self.startMonitor()
-                try await self.runShell(on: connection)
-                self.finish(nil)
-            } catch is CancellationError {
-                self?.finish(nil)
-            } catch {
-                self?.finish(error.localizedDescription)
+            await self?.establish(knownHosts: knownHosts, confirm: confirm)
+        }
+    }
+
+    private func establish(knownHosts: KnownHostsStore, confirm: @escaping TOFUHostKeyValidator.Confirm) async {
+        do {
+            let connection = try await SSHConnection.connect(
+                profile: profile,
+                knownHosts: knownHosts,
+                confirmHostKey: confirm
+            )
+            guard !Task.isCancelled else {
+                await connection.close()
+                return
             }
+            self.connection = connection
+            state = .connected
+            startMonitor()
+            try await runShell(on: connection)
+            finish(nil)
+        } catch is CancellationError {
+            finish(nil)
+        } catch {
+            finish(error.localizedDescription)
         }
     }
 
