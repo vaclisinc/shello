@@ -27,4 +27,6 @@ jobs:
             -project HerdrMobile.xcodeproj \
             -scheme HerdrMobile \
             -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO
