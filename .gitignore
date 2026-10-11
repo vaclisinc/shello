@@ -1,0 +1,8 @@
+.DS_Store
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+Packages/HerdrKit/Package.resolved
+HerdrMobile/Info.plist

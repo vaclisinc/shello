@@ -1,0 +1,64 @@
+name: HerdrMobile
+options:
+  bundleIdPrefix: dev.herdr
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  HerdrKit:
+    path: Packages/HerdrKit
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    minorVersion: 1.20.0
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  HerdrMobile:
+    type: application
+    platform: iOS
+    sources:
+      - HerdrMobile
+    dependencies:
+      - package: HerdrKit
+      - package: SwiftTerm
+    info:
+      path: HerdrMobile/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSLocalNetworkUsageDescription: Herdr connects over SSH to computers on your local network.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.herdr.mobile
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        CODE_SIGN_STYLE: Automatic
+
+schemes:
+  HerdrMobile:
+    build:
+      targets:
+        HerdrMobile: all
+    run:
+      config: Debug
+    archive:
+      config: Release

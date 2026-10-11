@@ -1,0 +1,17 @@
+{"id":"cli:api:snapshot","result":{"type":"session_snapshot","snapshot":{
+  "version":"0.9.3","protocol":7,
+  "focused_workspace_id":"w1","focused_tab_id":"w1:t1","focused_pane_id":"w1:p1",
+  "workspaces":[{"workspace_id":"w1","number":1,"label":"api","focused":true,"pane_count":3,"tab_count":1,"active_tab_id":"w1:t1","agent_status":"blocked","tokens":{"branch":"main"}}],
+  "tabs":[{"tab_id":"w1:t1","workspace_id":"w1","number":1,"label":"main","focused":true,"pane_count":3,"agent_status":"blocked"}],
+  "panes":[
+    {"pane_id":"w1:p1","terminal_id":"term-1","workspace_id":"w1","tab_id":"w1:t1","focused":true,"cwd":"/home/me/api","agent":"claude","display_agent":"Claude Code","agent_status":"blocked","revision":12},
+    {"pane_id":"w1:p2","terminal_id":"term-2","workspace_id":"w1","tab_id":"w1:t1","focused":false,"agent":"codex","agent_status":"working","revision":4,"scroll":{"offset_from_bottom":0,"max_offset_from_bottom":10,"viewport_rows":40}},
+    {"pane_id":"w1:p3","terminal_id":"term-3","workspace_id":"w1","tab_id":"w1:t1","focused":false,"agent_status":"idle","revision":1}
+  ],
+  "layouts":[{"tab_id":"w1:t1","whatever":{"nested":true}}],
+  "agents":[
+    {"terminal_id":"term-2","agent":"codex","agent_status":"working","workspace_id":"w1","tab_id":"w1:t1","pane_id":"w1:p2","focused":false,"state_change_seq":3,"revision":4},
+    {"terminal_id":"term-1","name":"reviewer","agent":"claude","display_agent":"Claude Code","terminal_title_stripped":"Allow edit to src/main.rs?","agent_status":"blocked","workspace_id":"w1","tab_id":"w1:t1","pane_id":"w1:p1","focused":true,"state_change_seq":9,"cwd":"/home/me/api","revision":12,"state_labels":{"blocked":"approval"},"agent_session":{"source":"claude","agent":"claude","kind":"session_id","value":"abc"}},
+    {"terminal_id":"term-9","agent":"future-agent","agent_status":"some_new_state","workspace_id":"w1","tab_id":"w1:t1","pane_id":"w1:p9","focused":false,"revision":1}
+  ]
+}}}
