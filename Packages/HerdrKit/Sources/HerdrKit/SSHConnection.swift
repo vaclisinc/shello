@@ -29,6 +29,15 @@ public final class SSHConnection: @unchecked Sendable {
     public let profile: HostProfile
     public let client: SSHClient
 
+    private let lock = NSLock()
+    private var _herdrLegacyCLI: Bool?
+
+    /// Set once we learn the host runs a herdr without `herdr api` (0.7.x); nil until the first snapshot.
+    public var herdrLegacyCLI: Bool? {
+        get { lock.withLock { _herdrLegacyCLI } }
+        set { lock.withLock { _herdrLegacyCLI = newValue } }
+    }
+
     private init(profile: HostProfile, client: SSHClient) {
         self.profile = profile
         self.client = client
@@ -187,20 +196,40 @@ public struct HerdrRemote: Sendable {
         return result.stdout
     }
 
+    private var isLegacy: Bool { connection.herdrLegacyCLI == true }
+
+    /// Uses `herdr api snapshot`, falling back to the per-object lists older herdr releases offer.
     public func snapshot() async throws -> SessionSnapshot {
-        try HerdrResponse.decodeSnapshot(try await checked(command.snapshot(), timeout: .seconds(15)))
+        if !isLegacy {
+            do {
+                let snapshot = try HerdrResponse.decodeSnapshot(try await checked(command.snapshot(), timeout: .seconds(15)))
+                connection.herdrLegacyCLI = false
+                return snapshot
+            } catch HerdrResponseError.unexpectedOutput(let text) where HerdrResponse.isUnknownCommand(text) {
+                connection.herdrLegacyCLI = true
+            }
+        }
+        return try HerdrResponse.decodeLegacySnapshot(try await checked(command.legacySnapshot(), timeout: .seconds(15)))
     }
 
-    public func readAgent(_ agent: AgentInfo, lines: Int = 200) async throws -> String {
-        try await checked(command.agentRead(agent.target, lines: lines))
+    public func readAgent(_ agent: AgentInfo, lines: Int = 200, source: HerdrReadSource = .recentUnwrapped, ansi: Bool = false) async throws -> String {
+        HerdrResponse.readText(try await checked(command.agentRead(agent.target, lines: lines, source: source, ansi: ansi)))
     }
 
     public func prompt(_ agent: AgentInfo, text: String) async throws {
-        try await checked(command.agentPrompt(agent.target, text: text))
+        if isLegacy {
+            try await checked(command.legacyAgentPrompt(agent.target, paneId: agent.paneId, text: text))
+        } else {
+            try await checked(command.agentPrompt(agent.target, text: text))
+        }
     }
 
     public func sendKeys(_ agent: AgentInfo, keys: [String]) async throws {
-        try await checked(command.agentSendKeys(agent.target, keys: keys))
+        if isLegacy {
+            try await checked(command.paneSendKeys(agent.paneId, keys: keys))
+        } else {
+            try await checked(command.agentSendKeys(agent.target, keys: keys))
+        }
     }
 
     /// Types into the agent's pane without submitting, e.g. to answer a question dialog.

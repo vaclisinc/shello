@@ -27,6 +27,13 @@ final class AppModel: ObservableObject {
     func close(_ host: HostProfile) {
         sessions[host.id]?.disconnect()
         sessions[host.id] = nil
+        updateBackgroundKeepAlive()
+    }
+
+    /// Stay alive in the background only while a session should be connected.
+    func updateBackgroundKeepAlive() {
+        let wanted = BackgroundLocation.isEnabled && sessions.values.contains { $0.wantsConnection }
+        BackgroundLocation.shared.setActive(wanted)
     }
 
     func delete(_ host: HostProfile) {
@@ -39,6 +46,7 @@ final class AppModel: ObservableObject {
         for session in sessions.values {
             session.reconnectIfNeeded()
         }
+        updateBackgroundKeepAlive()
     }
 
     // MARK: Host keys

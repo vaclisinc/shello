@@ -91,6 +91,75 @@ final class HerdrKitTests: XCTestCase {
         XCTAssertEqual(herdr.agentRead("reviewer", lines: 50), "/usr/bin/herdr agent read reviewer --source recent-unwrapped --lines 50")
     }
 
+    // MARK: herdr 0.7.x
+
+    func testLegacySnapshotFromAgentAndWorkspaceLists() throws {
+        let output = """
+        {"id":"cli:agent:list","result":{"agents":[{"agent":"codex","agent_status":"done","cwd":"/p","focused":false,"foreground_cwd":"/p","pane_id":"w5:pV","revision":0,"tab_id":"w5:tV","terminal_id":"term_1","workspace_id":"w5"},{"agent":"claude","agent_status":"blocked","focused":true,"pane_id":"w5:pY","revision":0,"tab_id":"w5:tY","terminal_id":"term_2","workspace_id":"w5"}],"type":"agent_list"}}
+
+        {"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"active_tab_id":"w5:tY","agent_status":"done","focused":true,"label":"vaclis","number":1,"pane_count":3,"tab_count":3,"workspace_id":"w5"}]}}
+
+        {"id":"cli:tab:list","result":{"tabs":[{"agent_status":"done","focused":false,"label":"1","number":27,"pane_count":1,"tab_id":"w5:tV","workspace_id":"w5"},{"agent_status":"idle","focused":true,"label":"review","number":29,"pane_count":1,"tab_id":"w5:tY","workspace_id":"w5"}],"type":"tab_list"}}
+        """
+        let snapshot = try HerdrResponse.decodeLegacySnapshot(output)
+        XCTAssertEqual(snapshot.agents.map(\.paneId), ["w5:pV", "w5:pY"])
+        XCTAssertEqual(snapshot.agentsByUrgency.first?.agentStatus, .blocked)
+        XCTAssertEqual(snapshot.workspace("w5")?.label, "vaclis")
+        // No pane ids in titles: numeric tab labels fall back to the tab number, real labels are shown.
+        XCTAssertEqual(snapshot.displayName(for: snapshot.agents[0]), "vaclis › tab 1")
+        XCTAssertEqual(snapshot.displayName(for: snapshot.agents[1]), "vaclis › review")
+    }
+
+    func testUnknownCommandIsDetected() {
+        let error = HerdrResponse.failure(exitCode: 1, stdout: "", stderr: "unknown command: api\nrun 'herdr --help' for usage\n")
+        guard case HerdrResponseError.unexpectedOutput(let text) = error else { return XCTFail("\(error)") }
+        XCTAssertTrue(HerdrResponse.isUnknownCommand(text))
+    }
+
+    func testBareErrorObjectIsDecoded() {
+        let error = HerdrResponse.failure(exitCode: 1, stdout: "", stderr: #"{"code":"pane_not_found","message":"pane w5:pX not found"}"#)
+        XCTAssertEqual(error as? HerdrAPIError, HerdrAPIError(code: "pane_not_found", message: "pane w5:pX not found"))
+    }
+
+    func testReadTextUnwrapsJSONEnvelope() {
+        let json = #"{"id":"cli:agent:read","result":{"read":{"format":"text","pane_id":"w5:pY","text":"line 1\nline 2","truncated":false},"type":"pane_read"}}"#
+        XCTAssertEqual(HerdrResponse.readText(json), "line 1\nline 2")
+        XCTAssertEqual(HerdrResponse.readText("plain output"), "plain output")
+    }
+
+    func testLegacyCommands() {
+        let herdr = HerdrCommand(executable: "/usr/bin/herdr")
+        XCTAssertEqual(herdr.legacySnapshot(), "/usr/bin/herdr agent list && echo && /usr/bin/herdr workspace list && echo && /usr/bin/herdr tab list")
+        XCTAssertEqual(
+            herdr.legacyAgentPrompt("w1:p1", paneId: "w1:p1", text: "hi there"),
+            "/usr/bin/herdr agent send w1:p1 'hi there' && sleep 0.3 && /usr/bin/herdr pane send-keys w1:p1 enter"
+        )
+    }
+
+    // MARK: Host profiles
+
+    func testOldProfilesKeepTheirStartupBehaviour() throws {
+        let id = UUID()
+        func decode(_ extra: String) throws -> HostProfile {
+            let json = #"{"id":"\#(id.uuidString)","name":"","hostname":"h","port":22,"username":"u","auth":{"password":{}},"herdrPath":"herdr","herdrSession":"","monitorAgents":true\#(extra)}"#
+            return try JSONDecoder().decode(HostProfile.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(try decode(#","autoAttachHerdr":true"#).startup, .herdr)
+        XCTAssertEqual(try decode(#","autoAttachHerdr":false"#).startup, .shell)
+        let roundTrip = try JSONDecoder().decode(HostProfile.self, from: JSONEncoder().encode(HostProfile(hostname: "h", username: "u", startup: .tmux, tmuxSession: "work")))
+        XCTAssertEqual(roundTrip.startup, .tmux)
+        XCTAssertEqual(roundTrip.tmuxSession, "work")
+    }
+
+    func testStartupCommands() {
+        XCTAssertEqual(HostProfile(startup: .tmux, tmuxSession: "my work").startupCommand, "tmux new-session -A -s 'my work'")
+        XCTAssertEqual(HostProfile(startup: .tmux, tmuxSession: " ").startupCommand, "tmux new-session -A -s main")
+        XCTAssertNil(HostProfile(startup: .shell).startupCommand)
+        XCTAssertEqual(HostProfile(startup: .custom, customCommand: " zellij attach -c ").startupCommand, "zellij attach -c")
+        XCTAssertTrue(HostProfile(startup: .herdr).startupCommand?.hasSuffix(" herdr") == true)
+        XCTAssertFalse(HostProfile(startup: .tmux, monitorAgents: true).watchesAgents)
+    }
+
     // MARK: Transitions
 
     private func agent(_ id: String, _ status: AgentStatus) -> AgentInfo {

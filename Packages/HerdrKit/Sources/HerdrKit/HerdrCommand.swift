@@ -67,8 +67,19 @@ public struct HerdrCommand: Sendable, Hashable {
 
     public func status() -> String { cli(["status"]) }
 
-    public func agentRead(_ target: String, lines: Int = 200, source: HerdrReadSource = .recentUnwrapped) -> String {
-        cli(["agent", "read", target, "--source", source.rawValue, "--lines", String(lines)])
+    /// herdr 0.7.x has no `api snapshot`: list agents, workspaces and tabs instead, one JSON object per line.
+    public func legacySnapshot() -> String {
+        [["agent", "list"], ["workspace", "list"], ["tab", "list"]].map(cli).joined(separator: " && echo && ")
+    }
+
+    /// herdr 0.7.x has no `agent prompt`: type the text, then press Enter in the agent's pane.
+    public func legacyAgentPrompt(_ target: String, paneId: String, text: String) -> String {
+        cli(["agent", "send", target, text]) + " && sleep 0.3 && " + cli(["pane", "send-keys", paneId, "enter"])
+    }
+
+    /// `ansi` keeps the pane's colors as SGR escapes (`--format ansi`).
+    public func agentRead(_ target: String, lines: Int = 200, source: HerdrReadSource = .recentUnwrapped, ansi: Bool = false) -> String {
+        cli(["agent", "read", target, "--source", source.rawValue, "--lines", String(lines)] + (ansi ? ["--format", "ansi"] : []))
     }
 
     /// Submits text + Enter to an agent. herdr rejects this with `agent_blocked`
@@ -163,6 +174,48 @@ public enum HerdrResponse {
         return Data(text[start...end].utf8)
     }
 
+    private struct LegacyListResult: Decodable {
+        var agents: [AgentInfo]?
+        var workspaces: [WorkspaceInfo]?
+        var tabs: [TabInfo]?
+    }
+
+    private struct ReadResult: Decodable {
+        struct Read: Decodable { var text: String }
+        var read: Read
+    }
+
+    /// True when herdr rejected a subcommand it doesn't know (an older release).
+    public static func isUnknownCommand(_ text: String) -> Bool {
+        text.lowercased().contains("unknown command")
+    }
+
+    /// Builds a snapshot from `legacySnapshot()` output: an agent list line and a workspace list line.
+    public static func decodeLegacySnapshot(_ text: String) throws -> SessionSnapshot {
+        var snapshot = SessionSnapshot()
+        var decodedAny = false
+        for line in text.split(whereSeparator: \.isNewline) {
+            guard let data = jsonSlice(String(line)) else { continue }
+            let envelope = try decoder().decode(Envelope<LegacyListResult>.self, from: data)
+            if let error = envelope.error { throw error }
+            if let agents = envelope.result?.agents { snapshot.agents = agents; decodedAny = true }
+            if let workspaces = envelope.result?.workspaces { snapshot.workspaces = workspaces; decodedAny = true }
+            if let tabs = envelope.result?.tabs { snapshot.tabs = tabs; decodedAny = true }
+        }
+        guard decodedAny else { throw HerdrResponseError.unexpectedOutput(text) }
+        return snapshot
+    }
+
+    /// `agent read` prints plain text on some releases and a JSON envelope on others.
+    public static func readText(_ output: String) -> String {
+        guard let data = jsonSlice(output),
+              let envelope = try? decoder().decode(Envelope<ReadResult>.self, from: data),
+              let text = envelope.result?.read.text else {
+            return output
+        }
+        return text
+    }
+
     public static func decodeSnapshot(_ text: String) throws -> SessionSnapshot {
         guard let data = jsonSlice(text) else { throw HerdrResponseError.unexpectedOutput(text) }
         let envelope = try decoder().decode(Envelope<SnapshotResult>.self, from: data)
@@ -180,6 +233,10 @@ public enum HerdrResponse {
         if let data = jsonSlice(combined),
            let envelope = try? decoder().decode(Envelope<IgnoredResult>.self, from: data),
            let error = envelope.error {
+            return error
+        }
+        // Some older commands print the error object without the envelope.
+        if let data = jsonSlice(combined), let error = try? decoder().decode(HerdrAPIError.self, from: data) {
             return error
         }
         let lower = combined.lowercased()

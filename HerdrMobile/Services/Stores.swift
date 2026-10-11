@@ -93,6 +93,13 @@ final class KeyStore: ObservableObject {
         DiskStore.save(keys, to: "keys.json")
     }
 
+    func rename(_ key: SSHKeyInfo, to name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let index = keys.firstIndex(where: { $0.id == key.id }) else { return }
+        keys[index].name = name
+        DiskStore.save(keys, to: "keys.json")
+    }
+
     func key(_ id: UUID) -> SSHKeyInfo? {
         keys.first { $0.id == id }
     }

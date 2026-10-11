@@ -26,6 +26,8 @@ final class TerminalSession: ObservableObject, Identifiable {
     @Published private(set) var state: State = .idle
     @Published private(set) var title: String = ""
     @Published private(set) var snapshot: SessionSnapshot?
+    /// Pane of an agent to open in the Agents tab (set when a notification is tapped).
+    @Published var requestedAgentPane: String?
     @Published private(set) var monitorError: String?
     /// True while the session screen is on screen; alerts become haptics instead of banners.
     var isVisible = false
@@ -41,7 +43,7 @@ final class TerminalSession: ObservableObject, Identifiable {
     private var backlog: [UInt8] = []
     private weak var terminalView: TerminalView?
     /// The user wants this session up; drives auto-reconnect when returning to the foreground.
-    private var wantsConnection = false
+    private(set) var wantsConnection = false
 
     init(profile: HostProfile, app: AppModel) {
         self.id = profile.id
@@ -58,6 +60,7 @@ final class TerminalSession: ObservableObject, Identifiable {
     func connect() {
         guard !state.isLive, let app else { return }
         wantsConnection = true
+        app.updateBackgroundKeepAlive()
         state = .connecting
         if let updated = app.hosts.hosts.first(where: { $0.id == profile.id }) {
             profile = updated
@@ -98,6 +101,7 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     func disconnect() {
         wantsConnection = false
+        app?.updateBackgroundKeepAlive()
         shellTask?.cancel()
         monitorTask?.cancel()
         let connection = self.connection
@@ -122,6 +126,13 @@ final class TerminalSession: ObservableObject, Identifiable {
         input = nil
         connection = nil
         state = .disconnected(error)
+        // Kept alive in the background (e.g. the network changed): retry instead of waiting for the foreground.
+        if wantsConnection, error != nil, UIApplication.shared.applicationState == .background, BackgroundLocation.isEnabled {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                self?.reconnectIfNeeded()
+            }
+        }
         let message = error.map { "\r\n\u{1b}[31m[\($0)]\u{1b}[0m\r\n" } ?? "\r\n\u{1b}[90m[disconnected]\u{1b}[0m\r\n"
         feed(Array(message.utf8))
     }
@@ -132,14 +143,14 @@ final class TerminalSession: ObservableObject, Identifiable {
         let (stream, continuation) = AsyncStream<Input>.makeStream()
         input = continuation
         let profile = self.profile
-        let shouldAttachHerdr = profile.autoAttachHerdr
+        let startupCommand = profile.startupCommand
 
         try await connection.withShell(cols: cols, rows: rows) { output, writer in
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // Single writer keeps keystrokes and resizes in order.
                 group.addTask {
-                    if shouldAttachHerdr {
-                        try await writer.write(Array("\(profile.herdr.attach())\r".utf8))
+                    if let startupCommand {
+                        try await writer.write(Array("\(startupCommand)\r".utf8))
                     }
                     for await event in stream {
                         switch event {
@@ -204,7 +215,7 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     private func startMonitor() {
         monitorTask?.cancel()
-        guard profile.monitorAgents else { return }
+        guard profile.watchesAgents else { return }
         monitorTask = Task { [weak self] in
             // Give the TUI a moment to start its server on first launch.
             try? await Task.sleep(for: .seconds(1.5))

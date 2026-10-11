@@ -35,9 +35,27 @@ enum Notifier {
     }
 }
 
-/// Shows notifications while the app is in the foreground too.
-final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+/// Where a tapped notification should take the user.
+struct NotificationRoute: Equatable {
+    var host: UUID
+    var pane: String?
+}
+
+/// Shows notifications while the app is in the foreground too, and routes taps.
+final class NotificationDelegate: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
+
+    @MainActor @Published var route: NotificationRoute?
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let info = response.notification.request.content.userInfo
+        guard let host = (info["host"] as? String).flatMap(UUID.init(uuidString:)) else { return }
+        let pane = info["pane"] as? String
+        await MainActor.run { route = NotificationRoute(host: host, pane: pane) }
+    }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,

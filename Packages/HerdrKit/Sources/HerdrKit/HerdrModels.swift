@@ -99,9 +99,10 @@ public struct AgentInfo: Codable, Hashable, Sendable, Identifiable {
 
     public var kindLabel: String { displayAgent ?? agent ?? "agent" }
 
+    /// The agent's own name, else its kind; `SessionSnapshot.displayName(for:)` adds workspace context.
     public var displayName: String {
         if let name, !name.isEmpty { return name }
-        return "\(kindLabel) · \(paneId)"
+        return kindLabel
     }
 
     public var subtitle: String? {
@@ -154,6 +155,22 @@ public struct SessionSnapshot: Codable, Hashable, Sendable {
             if $0.agentStatus != $1.agentStatus { return $0.agentStatus < $1.agentStatus }
             return $0.paneId.localizedStandardCompare($1.paneId) == .orderedAscending
         }
+    }
+
+    /// A human title for an agent: its name, else the workspace (and tab, when the tab has a
+    /// real label or the workspace hosts several agents) instead of internal ids like `w3:p5`.
+    public func displayName(for agent: AgentInfo) -> String {
+        if let name = agent.name, !name.isEmpty { return name }
+        guard let workspace = workspace(agent.workspaceId), !workspace.label.isEmpty else { return agent.kindLabel }
+        let tab = tabs.first { $0.tabId == agent.tabId }
+        if let tab, !tab.label.isEmpty, Int(tab.label) == nil, tab.label != workspace.label {
+            return "\(workspace.label) › \(tab.label)"
+        }
+        let siblings = agents.filter { $0.workspaceId == agent.workspaceId }.count
+        if siblings > 1, let tab {
+            return "\(workspace.label) › tab \(tab.label.isEmpty ? String(tab.number) : tab.label)"
+        }
+        return workspace.label
     }
 
     public var blockedCount: Int { agents.filter { $0.agentStatus == .blocked }.count }

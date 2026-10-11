@@ -106,9 +106,11 @@ final class KeyBar: UIInputView {
         ])
 
         for key in keys {
-            var config = UIButton.Configuration.gray()
-            config.cornerStyle = .medium
+            var config = UIButton.Configuration.filled()
+            config.cornerStyle = .fixed
+            config.background.cornerRadius = 2
             config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+            Self.applyOff(&config)
             if let symbol = key.symbol {
                 config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium))
             } else {
@@ -225,20 +227,29 @@ final class KeyBar: UIInputView {
         guard let button, var config = button.configuration else { return }
         switch state {
         case .off:
-            config.baseBackgroundColor = nil
-            config.baseForegroundColor = nil
-            config.background.strokeWidth = 0
+            Self.applyOff(&config)
         case .once:
-            config.baseBackgroundColor = .tintColor
-            config.baseForegroundColor = .white
-            config.background.strokeWidth = 0
+            // Armed for the next key: Shello yellow.
+            config.baseBackgroundColor = UIColor(Theme.yellow)
+            config.baseForegroundColor = UIColor(Theme.onAccent)
+            config.background.strokeColor = UIColor(Theme.ink)
+            config.background.strokeWidth = 1.5
         case .locked:
-            config.baseBackgroundColor = .tintColor
-            config.baseForegroundColor = .white
-            config.background.strokeColor = .white
-            config.background.strokeWidth = 2
+            // Locked: ink fill so it reads as "held down".
+            config.baseBackgroundColor = UIColor(Theme.ink)
+            config.baseForegroundColor = UIColor(Theme.yellow)
+            config.background.strokeColor = UIColor(Theme.ink)
+            config.background.strokeWidth = 1.5
         }
         button.configuration = config
+    }
+
+    /// Square paper key with an ink outline, matching the app chrome.
+    private static func applyOff(_ config: inout UIButton.Configuration) {
+        config.baseBackgroundColor = UIColor(Theme.card)
+        config.baseForegroundColor = UIColor(Theme.ink)
+        config.background.strokeColor = UIColor(Theme.ink)
+        config.background.strokeWidth = 1.5
     }
 
     private func paste() {

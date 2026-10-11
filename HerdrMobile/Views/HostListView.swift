@@ -7,17 +7,28 @@ struct HostListView: View {
     @State private var path: [UUID] = []
     @State private var editing: HostProfile?
     @State private var showingKeys = false
+    @ObservedObject private var notifications = NotificationDelegate.shared
+
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .light
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                header.cardRow()
                 if hosts.hosts.isEmpty {
-                    emptyState
+                    emptyState.cardRow()
+                } else {
+                    SectionLabel("Hosts")
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 0, trailing: 16))
                 }
                 ForEach(hosts.hosts) { host in
                     Button { open(host) } label: {
                         HostRow(host: host, session: app.sessions[host.id])
                     }
+                    .buttonStyle(.plain)
+                    .cardRow()
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) { app.delete(host) } label: {
                             Label("Delete", systemImage: "trash")
@@ -25,7 +36,7 @@ struct HostListView: View {
                         Button { editing = host } label: {
                             Label("Edit", systemImage: "pencil")
                         }
-                        .tint(.orange)
+                        .tint(Theme.yellow)
                     }
                     .contextMenu {
                         Button { editing = host } label: { Label("Edit", systemImage: "pencil") }
@@ -37,11 +48,23 @@ struct HostListView: View {
                 }
                 .onMove { hosts.move(from: $0, to: $1) }
             }
-            .navigationTitle("Herdr")
+            .listStyle(.plain)
+            .paperScreen()
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showingKeys = true } label: { Image(systemName: "key") }
-                        .accessibilityLabel("SSH Keys")
+                    Menu {
+                        Button { showingKeys = true } label: { Label("SSH Keys", systemImage: "key") }
+                        Picker(selection: $appearance) {
+                            ForEach(Appearance.allCases) { Text($0.title).tag($0) }
+                        } label: {
+                            Label("Appearance", systemImage: "circle.lefthalf.filled")
+                        }
+                        .pickerStyle(.menu)
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Settings")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { editing = HostProfile() } label: { Image(systemName: "plus") }
@@ -53,6 +76,14 @@ struct HostListView: View {
                     SessionView(session: session)
                 }
             }
+            .onChange(of: notifications.route, initial: true) { _, route in
+                guard let route, let host = hosts.hosts.first(where: { $0.id == route.host }) else { return }
+                notifications.route = nil
+                let session = app.session(for: host)
+                session.requestedAgentPane = route.pane
+                if !session.state.isLive { session.connect() }
+                path = [host.id]
+            }
             .sheet(item: $editing) { host in
                 HostEditorView(host: host)
             }
@@ -62,17 +93,39 @@ struct HostListView: View {
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image("BrandMark")
+                .resizable()
+                .frame(width: 56, height: 56)
+                .overlay(Rectangle().strokeBorder(Theme.ink, lineWidth: Theme.line))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SHELLO")
+                    .font(Theme.mono(30, .heavy))
+                    .foregroundStyle(Theme.ink)
+                Text("Say hello to your terminal.")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.muted)
+            }
+        }
+        .padding(.top, 4)
+    }
+
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Add a host to get started").font(.headline)
-            Text("Herdr connects over SSH, opens the herdr TUI and watches your coding agents. You'll get an alert when one needs your approval or finishes.")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("SESSIONS THAT NEVER HANG UP")
+                .font(Theme.mono(16, .heavy))
+                .foregroundStyle(Theme.ink)
+            Text("Connect over SSH to herdr, tmux or any shell. Your work keeps running on the server, and Shello taps you when an agent needs approval or finishes.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Button("Add Host") { editing = HostProfile() }
-                .buttonStyle(.borderedProminent)
+                .foregroundStyle(Theme.muted)
+            Button("Add a host") { editing = HostProfile() }
+                .buttonStyle(BlockButtonStyle())
                 .padding(.top, 4)
         }
-        .padding(.vertical, 8)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
     }
 
     private func open(_ host: HostProfile) {
@@ -117,38 +170,59 @@ private struct HostRowContent: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "server.rack")
-                .font(.title3)
-                .foregroundStyle(dotColor)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(host.displayName).font(.headline).foregroundStyle(.primary)
-                Text(host.addressLabel).font(.caption).foregroundStyle(.secondary)
+            Rectangle()
+                .fill(dotColor)
+                .frame(width: 12, height: 12)
+                .overlay(Rectangle().strokeBorder(Theme.ink, lineWidth: 1.5))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(host.displayName)
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                Text(host.addressLabel)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.muted)
+                Text(host.startup.rawValue.uppercased())
+                    .font(Theme.mono(10))
+                    .tracking(1)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .overlay(Rectangle().strokeBorder(Theme.muted, lineWidth: 1))
+                    .foregroundStyle(Theme.muted)
+                    .padding(.top, 2)
             }
             Spacer()
             if working > 0 {
                 Label("\(working)", systemImage: "gearshape.2")
-                    .font(.caption)
-                    .foregroundStyle(.blue)
+                    .font(Theme.mono(12))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Theme.sky)
+                    .overlay(Rectangle().strokeBorder(Theme.ink, lineWidth: 1.5))
             }
             if blocked > 0 {
                 Text("\(blocked)")
-                    .font(.caption.bold())
+                    .font(Theme.mono(12))
                     .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(.orange, in: Capsule())
-                    .foregroundStyle(.white)
+                    .padding(.vertical, 3)
+                    .background(Theme.coral)
+                    .overlay(Rectangle().strokeBorder(Theme.ink, lineWidth: 1.5))
+                    .foregroundStyle(Theme.onAccent)
             }
+            Image(systemName: "chevron.right")
+                .font(.footnote.bold())
+                .foregroundStyle(Theme.muted)
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .card()
     }
 
     private var dotColor: Color {
         switch status {
-        case .connected: return .green
-        case .connecting: return .yellow
-        case .disconnected(let error): return error == nil ? .secondary : .red
-        case .idle, .none: return .secondary
+        case .connected: return Theme.mint
+        case .connecting: return Theme.yellow
+        case .disconnected(let error): return error == nil ? Theme.card : Theme.coral
+        case .idle, .none: return Theme.card
         }
     }
 }

@@ -6,6 +6,7 @@ import UserNotifications
 struct HerdrMobileApp: App {
     @StateObject private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .light
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
@@ -19,6 +20,8 @@ struct HerdrMobileApp: App {
                 .environmentObject(app.keys)
                 .hostKeyPrompt(app)
                 .onAppear { Notifier.requestAuthorization() }
+                .preferredColorScheme(appearance.colorScheme)
+                .tint(Theme.ink)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

@@ -6,7 +6,7 @@ import Security
 public struct Keychain: Sendable {
     public var service: String
 
-    public init(service: String = "dev.herdr.mobile") {
+    public init(service: String = "net.vaclis.shello") {
         self.service = service
     }
 

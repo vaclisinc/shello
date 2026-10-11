@@ -42,64 +42,103 @@ struct HostEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Server") {
-                    TextField("Name (optional)", text: $host.name)
-                    TextField("Hostname or IP", text: $host.hostname)
-                        .textContentType(.URL)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField("Port", text: $portText)
-                        .keyboardType(.numberPad)
-                    TextField("Username", text: $host.username)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-
-                Section("Authentication") {
-                    Picker("Method", selection: authChoice) {
-                        Text("Password").tag(AuthChoice.password)
-                        Text("SSH Key").tag(AuthChoice.key)
-                    }
-                    .pickerStyle(.segmented)
-
-                    if authChoice.wrappedValue == .password {
-                        SecureField(hosts.hasPassword(for: host) ? "Password (saved)" : "Password", text: $password)
-                            .textContentType(.password)
-                    } else if keys.keys.isEmpty {
-                        Button("Create or Import a Key…") { showingKeys = true }
-                    } else {
-                        Picker("Key", selection: selectedKey) {
-                            ForEach(keys.keys) { key in
-                                Text(key.name).tag(Optional(key.id))
-                            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    group("Server") {
+                        TextField("Name (optional)", text: $host.name)
+                            .field()
+                        TextField("Hostname or IP", text: $host.hostname)
+                            .textContentType(.URL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .field(monospaced: true)
+                        HStack(spacing: 10) {
+                            TextField("Username", text: $host.username)
+                                .textContentType(.username)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .field(monospaced: true)
+                            TextField("Port", text: $portText)
+                                .keyboardType(.numberPad)
+                                .field(monospaced: true)
+                                .frame(width: 86)
                         }
-                        Button("Manage Keys…") { showingKeys = true }
+                    }
+
+                    group("Authentication") {
+                        BlockSegmented(selection: authChoice, options: [(.password, "Password"), (.key, "SSH Key")])
+                        if authChoice.wrappedValue == .password {
+                            SecureField(hosts.hasPassword(for: host) ? "Password (saved)" : "Password", text: $password)
+                                .textContentType(.password)
+                                .field()
+                        } else if keys.keys.isEmpty {
+                            Button("Create or import a key") { showingKeys = true }
+                                .buttonStyle(BlockButtonStyle(compact: true))
+                        } else {
+                            HStack {
+                                Text("Key").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                                Spacer()
+                                Picker("Key", selection: selectedKey) {
+                                    ForEach(keys.keys) { key in
+                                        Text(key.name).tag(Optional(key.id))
+                                    }
+                                }
+                                .tint(Theme.ink)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(Theme.field)
+                            .overlay(Rectangle().strokeBorder(Theme.ink, lineWidth: 1.5))
+                            Button("Manage keys") { showingKeys = true }
+                                .buttonStyle(BlockButtonStyle(fill: Theme.card, foreground: Theme.ink, compact: true))
+                        }
+                    }
+
+                    group("On connect", footer: startupFooter) {
+                        BlockSegmented(selection: $host.startup, options: [
+                            (.herdr, "herdr"), (.tmux, "tmux"), (.shell, "Shell"), (.custom, "Custom"),
+                        ])
+                        switch host.startup {
+                        case .herdr:
+                            Toggle("Watch agents & notify", isOn: $host.monitorAgents)
+                                .tint(Theme.mint)
+                                .padding(.vertical, 2)
+                            TextField("herdr path", text: $host.herdrPath)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .field(monospaced: true)
+                            TextField("herdr session name (optional)", text: $host.herdrSession)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .field(monospaced: true)
+                        case .tmux:
+                            TextField("tmux session name", text: $host.tmuxSession)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .field(monospaced: true)
+                        case .shell:
+                            EmptyView()
+                        case .custom:
+                            TextField("Command, e.g. zellij attach -c", text: $host.customCommand)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .field(monospaced: true)
+                        }
+                    }
+
+                    if let error {
+                        Text(error)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Theme.onAccent)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .card(fill: Theme.coral, shadow: 3)
                     }
                 }
-
-                Section {
-                    Toggle("Open herdr on connect", isOn: $host.autoAttachHerdr)
-                    Toggle("Watch agents & notify", isOn: $host.monitorAgents)
-                    TextField("herdr path", text: $host.herdrPath)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.body.monospaced())
-                    TextField("Session name (optional)", text: $host.herdrSession)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("herdr")
-                } footer: {
-                    Text("Install herdr on the server with `curl -fsSL https://herdr.dev/install.sh | sh`. The app runs `herdr` in the shell and polls `herdr api snapshot` over a separate SSH channel.")
-                }
-
-                if let error {
-                    Section { Text(error).foregroundStyle(.red) }
-                }
+                .padding(16)
             }
+            .paperScreen()
             .navigationTitle(isNew ? "New Host" : "Edit Host")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -107,11 +146,41 @@ struct HostEditorView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
+                    Button("Save", action: save).bold()
                 }
             }
             .sheet(isPresented: $showingKeys) {
                 NavigationStack { KeysView() }
+            }
+        }
+    }
+
+    private var startupFooter: String {
+        switch host.startup {
+        case .herdr:
+            return "Install herdr on the server with `curl -fsSL https://herdr.dev/install.sh | sh`. Shello runs `herdr` in the shell and watches your agents over a separate SSH channel."
+        case .tmux:
+            return "Runs `tmux new-session -A -s <name>`: reattaches if the session exists, otherwise creates it, so your work survives disconnects."
+        case .shell:
+            return "A plain login shell. Anything running is lost if the connection drops."
+        case .custom:
+            return "Typed into the shell right after connecting."
+        }
+    }
+
+    private func group<Content: View>(_ title: String, footer: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title)
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .padding(14)
+            .card()
+            if let footer {
+                Text(.init(footer))
+                    .font(.caption)
+                    .foregroundStyle(Theme.muted)
+                    .padding(.horizontal, 2)
             }
         }
     }

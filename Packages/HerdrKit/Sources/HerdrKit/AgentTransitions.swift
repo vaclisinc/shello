@@ -11,11 +11,19 @@ public struct AgentAlert: Hashable, Sendable {
 
     public var kind: Kind
     public var agent: AgentInfo
+    /// Display name resolved against the snapshot the alert came from.
+    public var name: String
+
+    public init(kind: Kind, agent: AgentInfo, name: String? = nil) {
+        self.kind = kind
+        self.agent = agent
+        self.name = name ?? agent.displayName
+    }
 
     public var title: String {
         switch kind {
-        case .needsInput: return "\(agent.displayName) needs you"
-        case .finished: return "\(agent.displayName) finished"
+        case .needsInput: return "\(name) needs you"
+        case .finished: return "\(name) finished"
         }
     }
 }
@@ -32,9 +40,9 @@ public enum AgentTransitions {
             guard let before = previous[agent.terminalId], before.agentStatus != agent.agentStatus else { continue }
             switch (before.agentStatus, agent.agentStatus) {
             case (_, .blocked):
-                alerts.append(AgentAlert(kind: .needsInput, agent: agent))
+                alerts.append(AgentAlert(kind: .needsInput, agent: agent, name: new.displayName(for: agent)))
             case (.working, .done), (.working, .idle):
-                alerts.append(AgentAlert(kind: .finished, agent: agent))
+                alerts.append(AgentAlert(kind: .finished, agent: agent, name: new.displayName(for: agent)))
             default:
                 break
             }
