@@ -23,11 +23,11 @@ jobs:
         run: xcodegen generate
       - name: Build for simulator
         run: |
-          xcodebuild build \
+          set -o pipefail
+          xcodebuild build -quiet \
             -project HerdrMobile.xcodeproj \
             -scheme HerdrMobile \
             -destination 'generic/platform=iOS Simulator' \
             -skipPackagePluginValidation \
             -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO > build.log 2>&1 \
-            || { grep -E -A4 "(error|fatal error):" build.log | grep -v "^--$" | sort -u | head -200; tail -40 build.log; exit 1; }
+            CODE_SIGNING_ALLOWED=NO 2>&1 | grep -v -E "^(warning: |.*: warning: )" | grep -v "^$" | cut -c1-600 | head -400
