@@ -5,7 +5,7 @@ let package = Package(
     name: "HerdrKit",
     platforms: [
         .iOS(.v17),
-        .macOS(.v15),
+        .macOS("15.0"),
     ],
     products: [
         .library(name: "HerdrKit", targets: ["HerdrKit"]),
