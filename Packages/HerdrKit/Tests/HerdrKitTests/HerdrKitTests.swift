@@ -106,7 +106,7 @@ final class HerdrKitTests: XCTestCase {
         XCTAssertEqual(snapshot.agentsByUrgency.first?.agentStatus, .blocked)
         XCTAssertEqual(snapshot.workspace("w5")?.label, "vaclis")
         // No pane ids in titles: numeric tab labels fall back to the tab number, real labels are shown.
-        XCTAssertEqual(snapshot.displayName(for: snapshot.agents[0]), "vaclis › tab 1")
+        XCTAssertEqual(snapshot.displayName(for: snapshot.agents[0]), "vaclis › tab 27")
         XCTAssertEqual(snapshot.displayName(for: snapshot.agents[1]), "vaclis › review")
     }
 

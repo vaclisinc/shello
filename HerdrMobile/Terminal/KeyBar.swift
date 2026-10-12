@@ -32,9 +32,12 @@ final class KeyBar: UIInputView {
         var action: Action
     }
 
+    // Most-used first: esc, shift, ^C and paste are reachable without scrolling.
     private let keys: [Key] = [
         Key(title: "esc", action: .key(.escape)),
         Key(title: "⇧", action: .shift),
+        Key(title: "^C", action: .raw([0x03])),
+        Key(title: "paste", action: .paste),
         Key(title: "ctrl", action: .ctrl),
         Key(title: "alt", action: .alt),
         Key(title: "tab", action: .key(.tab)),
@@ -47,7 +50,6 @@ final class KeyBar: UIInputView {
         Key(title: "", symbol: "arrow.right", action: .key(.right)),
         // herdr's tmux-style prefix; follow with a herdr binding (e.g. `q` detaches).
         Key(title: "^B", action: .raw([0x02])),
-        Key(title: "^C", action: .raw([0x03])),
         Key(title: "|", action: .key(.char("|"))),
         Key(title: "/", action: .key(.char("/"))),
         Key(title: "-", action: .key(.char("-"))),
@@ -57,13 +59,12 @@ final class KeyBar: UIInputView {
         Key(title: "end", action: .key(.end)),
         Key(title: "pgup", action: .key(.pageUp)),
         Key(title: "pgdn", action: .key(.pageDown)),
-        Key(title: "", symbol: "doc.on.clipboard", action: .paste),
         Key(title: "", symbol: "keyboard.chevron.compact.down", action: .dismiss),
     ]
 
     init(terminal: TerminalView) {
         self.terminal = terminal
-        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44), inputViewStyle: .keyboard)
+        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: Self.height), inputViewStyle: .keyboard)
         allowsSelfSizing = true
         build()
         // SwiftTerm clears its ctrl/meta flags after each typed character.
@@ -77,7 +78,9 @@ final class KeyBar: UIInputView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: 44) }
+    static let height: CGFloat = 38
+
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
 
     // MARK: Layout
 
@@ -109,20 +112,25 @@ final class KeyBar: UIInputView {
             var config = UIButton.Configuration.filled()
             config.cornerStyle = .fixed
             config.background.cornerRadius = 2
-            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+            config.contentInsets = NSDirectionalEdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
             Self.applyOff(&config)
             if let symbol = key.symbol {
-                config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium))
+                config.image = UIImage(systemName: symbol)
+                // Set on the configuration: the filled style otherwise scales symbols up.
+                config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
             } else {
                 var title = AttributedString(key.title)
-                title.font = .monospacedSystemFont(ofSize: 15, weight: .medium)
+                title.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
                 config.attributedTitle = title
             }
             let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 self?.perform(key)
             })
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
+            // Keys size to their label; otherwise spare width lands on arbitrary keys.
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
             button.accessibilityLabel = key.symbol ?? key.title
             switch key.action {
             case .shift, .ctrl, .alt: modifierButtons[key.title] = button

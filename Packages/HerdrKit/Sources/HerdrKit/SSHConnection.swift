@@ -237,6 +237,23 @@ public struct HerdrRemote: Sendable {
         try await checked(command.paneSendText(agent.paneId, text: text))
     }
 
+    /// Reads the agent's transcript: the recent tail first, then only appended bytes.
+    /// `allowFolderGuess` should be false when another agent shares the working directory.
+    public func readTranscript(_ agent: AgentInfo, allowFolderGuess: Bool, known: (path: String, size: Int)?) async throws -> TranscriptFetch.Chunk? {
+        guard let script = TranscriptFetch.command(
+            session: agent.agentSession,
+            processInfo: command.paneProcessInfo(agent.paneId),
+            cwd: agent.cwd ?? agent.foregroundCwd,
+            allowFolderGuess: allowFolderGuess,
+            known: known
+        ) else {
+            return nil
+        }
+        let result = try await connection.run("sh -c \(shellQuote(script))", timeout: .seconds(20))
+        guard result.succeeded else { return nil }
+        return TranscriptFetch.parse(result.stdout)
+    }
+
     public func focus(_ agent: AgentInfo) async throws {
         try await checked(command.agentFocus(agent.target))
     }

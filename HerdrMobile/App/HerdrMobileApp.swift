@@ -10,18 +10,23 @@ struct HerdrMobileApp: App {
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // Clears any Live Activity left over from a previous run.
+        _ = LiveActivityController.shared
     }
 
     var body: some Scene {
         WindowGroup {
-            HostListView()
-                .environmentObject(app)
-                .environmentObject(app.hosts)
-                .environmentObject(app.keys)
-                .hostKeyPrompt(app)
-                .onAppear { Notifier.requestAuthorization() }
-                .preferredColorScheme(appearance.colorScheme)
-                .tint(Theme.ink)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-agentDetailHarness") {
+                AgentDetailHarness(app: app)
+                    .preferredColorScheme(appearance.colorScheme)
+                    .tint(Theme.ink)
+            } else {
+                root
+            }
+            #else
+            root
+            #endif
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -34,6 +39,17 @@ struct HerdrMobileApp: App {
                 break
             }
         }
+    }
+
+    private var root: some View {
+            HostListView()
+                .environmentObject(app)
+                .environmentObject(app.hosts)
+                .environmentObject(app.keys)
+                .hostKeyPrompt(app)
+                .onAppear { Notifier.requestAuthorization() }
+                .preferredColorScheme(appearance.colorScheme)
+                .tint(Theme.ink)
     }
 }
 

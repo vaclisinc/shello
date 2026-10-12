@@ -91,8 +91,13 @@ public struct AgentInfo: Codable, Hashable, Sendable, Identifiable {
     public var completionSeq: UInt64?
     public var cwd: String?
     public var foregroundCwd: String?
+    /// Session file or id reported by a herdr integration (`herdr integration install claude`).
+    public var agentSession: AgentSessionInfo?
 
     public var id: String { paneId }
+
+    /// Whether Shello can show this agent as a chat from its transcript.
+    public var hasTranscript: Bool { agent == "claude" }
 
     /// What to pass to `herdr agent <cmd> <target>`: a live name, or the hosting pane id.
     public var target: String { name ?? paneId }
@@ -168,9 +173,21 @@ public struct SessionSnapshot: Codable, Hashable, Sendable {
         }
         let siblings = agents.filter { $0.workspaceId == agent.workspaceId }.count
         if siblings > 1, let tab {
-            return "\(workspace.label) › tab \(tab.label.isEmpty ? String(tab.number) : tab.label)"
+            // Tell same-workspace agents apart by tab number (labels here are numeric or repeat the workspace).
+            return "\(workspace.label) › tab \(tab.number)"
         }
         return workspace.label
+    }
+
+    /// True when the agent's transcript can't be pinned down: no session reported by a
+    /// herdr integration, and another live agent of the same kind works in the same folder,
+    /// so "newest transcript in this folder" could belong to either.
+    public func transcriptIsAmbiguous(for agent: AgentInfo) -> Bool {
+        guard agent.agentSession?.isKnown != true else { return false }
+        let folder = agent.cwd ?? agent.foregroundCwd
+        return agents.contains {
+            $0.paneId != agent.paneId && $0.agent == agent.agent && ($0.cwd ?? $0.foregroundCwd) == folder
+        }
     }
 
     public var blockedCount: Int { agents.filter { $0.agentStatus == .blocked }.count }

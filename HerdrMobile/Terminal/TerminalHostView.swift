@@ -6,6 +6,8 @@ import UIKit
 struct TerminalHostView: UIViewRepresentable {
     @ObservedObject var session: TerminalSession
     var fontSize: CGFloat
+    /// The terminal holds the keyboard only while it's the visible tab.
+    var isActive = true
     /// Called with the final size when a pinch-to-zoom gesture ends.
     var onFontSizeChange: (CGFloat) -> Void = { _ in }
 
@@ -34,11 +36,18 @@ struct TerminalHostView: UIViewRepresentable {
         view.addGestureRecognizer(pinch)
         context.coordinator.onFontSizeChange = onFontSizeChange
         session.attach(view: view)
-        DispatchQueue.main.async { _ = view.becomeFirstResponder() }
+        let active = isActive
+        DispatchQueue.main.async { if active { _ = view.becomeFirstResponder() } }
         return view
     }
 
     func updateUIView(_ view: TerminalView, context: Context) {
+        if isActive != context.coordinator.wasActive {
+            context.coordinator.wasActive = isActive
+            DispatchQueue.main.async {
+                if isActive { _ = view.becomeFirstResponder() } else { _ = view.resignFirstResponder() }
+            }
+        }
         context.coordinator.onFontSizeChange = onFontSizeChange
         // While pinching, the gesture owns the font size; don't snap back to the stored value.
         if !context.coordinator.isPinching, view.font.pointSize != fontSize {
@@ -50,6 +59,7 @@ struct TerminalHostView: UIViewRepresentable {
         let session: TerminalSession
         var onFontSizeChange: (CGFloat) -> Void = { _ in }
         private(set) var isPinching = false
+        var wasActive = true
         private var pinchStartSize: CGFloat = 0
 
         init(session: TerminalSession) {

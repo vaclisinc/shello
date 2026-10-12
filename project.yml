@@ -27,6 +27,7 @@ targets:
     dependencies:
       - package: HerdrKit
       - package: SwiftTerm
+      - target: ShelloWidgets
     info:
       path: HerdrMobile/Info.plist
       properties:
@@ -46,6 +47,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSLocalNetworkUsageDescription: Shello connects over SSH to computers on your local network.
         ITSAppUsesNonExemptEncryption: false
+        NSSupportsLiveActivities: true
         UIBackgroundModes:
           - location
         NSLocationWhenInUseUsageDescription: Shello uses background location only to keep your SSH sessions connected and agent notifications coming while the app is in the background. Your location is not stored or sent anywhere.
@@ -56,6 +58,25 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: L5P5TK3DLY
+
+  ShelloWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShelloWidgets
+      - HerdrMobile/Shared
+    info:
+      path: ShelloWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Shello
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.vaclis.shello.widgets
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: L5P5TK3DLY
+        SKIP_INSTALL: true
 
 schemes:
   HerdrMobile:

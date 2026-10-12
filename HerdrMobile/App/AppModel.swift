@@ -28,6 +28,12 @@ final class AppModel: ObservableObject {
         sessions[host.id]?.disconnect()
         sessions[host.id] = nil
         updateBackgroundKeepAlive()
+        sessionsChanged()
+    }
+
+    /// Connection or agent state changed somewhere: refresh the Live Activity.
+    func sessionsChanged() {
+        LiveActivityController.shared.update(sessions: Array(sessions.values))
     }
 
     /// Stay alive in the background only while a session should be connected.

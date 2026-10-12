@@ -56,17 +56,13 @@ struct AgentsView: View {
         .listStyle(.plain)
         .paperScreen()
         .refreshable { await session.refreshAgents() }
-        // Opened from a notification: show that agent once it's in the snapshot.
-        .onChange(of: session.snapshot, initial: true) { _, snapshot in
-            guard let pane = session.requestedAgentPane, let agent = snapshot?.agents.first(where: { $0.paneId == pane }) else { return }
-            session.requestedAgentPane = nil
-            selected = agent
-        }
         .sheet(item: $selected) { agent in
             AgentDetailView(session: session, agentID: agent.id) {
                 selected = nil
                 showTerminal()
             }
+            // A fresh view (and transcript state) for every agent.
+            .id(agent.id)
         }
     }
 }

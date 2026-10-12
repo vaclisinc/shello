@@ -47,20 +47,29 @@ final class NotificationDelegate: NSObject, ObservableObject, UNUserNotification
 
     @MainActor @Published var route: NotificationRoute?
 
+    // Completion-handler versions on purpose: the async variants finish off the main
+    // thread, and UIKit aborts the app when a notification tap completes there.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         let info = response.notification.request.content.userInfo
-        guard let host = (info["host"] as? String).flatMap(UUID.init(uuidString:)) else { return }
+        let host = (info["host"] as? String).flatMap(UUID.init(uuidString:))
         let pane = info["pane"] as? String
-        await MainActor.run { route = NotificationRoute(host: host, pane: pane) }
+        DispatchQueue.main.async {
+            if let host {
+                MainActor.assumeIsolated { self.route = NotificationRoute(host: host, pane: pane) }
+            }
+            completionHandler()
+        }
     }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        DispatchQueue.main.async { completionHandler([.banner, .sound, .list]) }
     }
 }

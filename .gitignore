@@ -6,3 +6,4 @@ DerivedData/
 .swiftpm/
 Packages/HerdrKit/Package.resolved
 HerdrMobile/Info.plist
+ShelloWidgets/Info.plist

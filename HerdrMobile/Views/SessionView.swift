@@ -29,7 +29,7 @@ struct SessionView: View {
 
             ZStack {
                 // Keep the terminal alive (and its scrollback) while the agents tab is shown.
-                TerminalHostView(session: session, fontSize: fontSize) { fontSize = $0 }
+                TerminalHostView(session: session, fontSize: fontSize, isActive: tab == .terminal) { fontSize = $0 }
                     .opacity(tab == .terminal ? 1 : 0)
                     .allowsHitTesting(tab == .terminal)
                 if tab == .agents {
@@ -82,8 +82,11 @@ struct SessionView: View {
                 }
             }
         }
-        .onChange(of: session.requestedAgentPane, initial: true) { _, pane in
-            if pane != nil { tab = .agents }
+        // A tapped notification lands in the live terminal, on that agent's pane.
+        .task(id: session.requestedAgentPane) {
+            guard session.requestedAgentPane != nil else { return }
+            tab = .terminal
+            await session.focusRequestedAgent()
         }
         .onChange(of: keepAlive) { _, _ in app.updateBackgroundKeepAlive() }
         .onAppear {

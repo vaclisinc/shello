@@ -114,6 +114,10 @@ public struct HerdrCommand: Sendable, Hashable {
         cli(["pane", "run", paneId, command])
     }
 
+    public func paneProcessInfo(_ paneId: String) -> String {
+        cli(["pane", "process-info", "--pane", paneId])
+    }
+
     public func paneFocus(_ paneId: String) -> String {
         cli(["pane", "focus", paneId])
     }
@@ -160,7 +164,7 @@ public enum HerdrResponse {
         var snapshot: SessionSnapshot
     }
 
-    static func decoder() -> JSONDecoder {
+    public static func decoder() -> JSONDecoder {
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase
         return d

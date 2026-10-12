@@ -23,11 +23,36 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     nonisolated let id: UUID
     @Published private(set) var profile: HostProfile
-    @Published private(set) var state: State = .idle
+    @Published private(set) var state: State = .idle {
+        didSet { if state != oldValue { app?.sessionsChanged() } }
+    }
     @Published private(set) var title: String = ""
-    @Published private(set) var snapshot: SessionSnapshot?
-    /// Pane of an agent to open in the Agents tab (set when a notification is tapped).
+    @Published private(set) var snapshot: SessionSnapshot? {
+        didSet { if snapshot != oldValue { app?.sessionsChanged() } }
+    }
+
+    #if DEBUG
+    /// Lets the UI harness show screens without a server.
+    func debugSetSnapshot(_ snapshot: SessionSnapshot) { self.snapshot = snapshot }
+    #endif
+    /// Pane of an agent to bring up in the live terminal (set when a notification is tapped).
     @Published var requestedAgentPane: String?
+
+    /// Switches herdr to the requested agent's pane once the connection and agent list are
+    /// back (a tap may have woken or relaunched the app), so the live TUI shows that agent.
+    func focusRequestedAgent() async {
+        guard let pane = requestedAgentPane else { return }
+        for _ in 0..<40 {
+            if Task.isCancelled { return }
+            if state == .connected, let remote = herdr, let agent = snapshot?.agents.first(where: { $0.paneId == pane }) {
+                requestedAgentPane = nil
+                try? await remote.focus(agent)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        requestedAgentPane = nil
+    }
     @Published private(set) var monitorError: String?
     /// True while the session screen is on screen; alerts become haptics instead of banners.
     var isVisible = false

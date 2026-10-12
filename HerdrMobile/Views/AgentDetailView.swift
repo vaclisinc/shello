@@ -1,5 +1,6 @@
 import HerdrKit
 import SwiftUI
+import UIKit
 
 /// Read an agent's recent output and answer it without opening the terminal.
 struct AgentDetailView: View {
@@ -15,6 +16,19 @@ struct AgentDetailView: View {
     @AppStorage("agentOutputZoom") private var zoom: Double = 1
     @GestureState private var pinch: CGFloat = 1
     @State private var prompt = ""
+    /// Top of the keyboard in window coordinates, while it's up.
+    @State private var keyboardTop: CGFloat?
+    /// Bottom of the sheet's content after SwiftUI's own keyboard avoidance.
+    @State private var contentBottom: CGFloat = 0
+    @State private var mode: Mode = .chat
+    @State private var transcript = ClaudeTranscript()
+    /// Transcript file and bytes already read, for incremental fetches.
+    @State private var transcriptPath: String?
+    @State private var transcriptSize = 0
+    /// False when the transcript can't be found or parsed: show the terminal instead.
+    @State private var chatAvailable = true
+
+    enum Mode: Hashable { case chat, terminal }
     @State private var busy = false
     @State private var error: String?
     @FocusState private var promptFocused: Bool
@@ -31,32 +45,32 @@ struct AgentDetailView: View {
     }
 
     var body: some View {
+        page
+    }
+
+    private var page: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                GeometryReader { geometry in
-                    ScrollViewReader { proxy in
-                        // Lines keep the pane's own wrapping so rules and boxes line up;
-                        // scroll sideways if they don't fit even at the smallest size.
-                        ScrollView([.vertical, .horizontal]) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(output)
-                                    .font(.system(size: fontSize(fitting: geometry.size.width), design: .monospaced))
-                                    .fixedSize()
-                                    .textSelection(.enabled)
-                                    .padding(10)
-                                Color.clear.frame(height: 1).id("bottom")
-                            }
-                            .frame(minWidth: geometry.size.width, alignment: .leading)
-                        }
-                        .background(TerminalPalette.background)
-                        .foregroundStyle(TerminalPalette.foreground)
-                        .simultaneousGesture(
-                            MagnifyGesture()
-                                .updating($pinch) { value, state, _ in state = value.magnification }
-                                .onEnded { value in zoom = min(max(zoom * value.magnification, 0.25), 4) }
-                        )
-                        .onChange(of: output) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-                    }
+                if isAmbiguous && !chatAvailable {
+                    Text("Another Claude runs in this folder, so Shello can't tell their chats apart. Run `herdr integration install claude` on the server to get chat view for both.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.yellow.opacity(0.35))
+                        .overlay(alignment: .bottom) { Rectangle().fill(Theme.ink).frame(height: Theme.line) }
+                } else if canChat && chatAvailable {
+                    BlockSegmented(selection: $mode, options: [(.chat, "Chat"), (.terminal, "Terminal")])
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Theme.paper)
+                        .overlay(alignment: .bottom) { Rectangle().fill(Theme.ink).frame(height: Theme.line) }
+                }
+                if showsChat {
+                    AgentChatView(items: transcript.items, status: agent?.agentStatus ?? .unknown)
+                } else {
+                    terminalOutput
                 }
 
                 if let error {
@@ -73,6 +87,22 @@ struct AgentDetailView: View {
                     .padding(16)
                     .background(Theme.paper)
                     .overlay(alignment: .top) { Rectangle().fill(Theme.ink).frame(height: Theme.line) }
+                // SwiftUI usually lifts the controls above the keyboard by itself, but on some
+                // devices it stops a little short. Cover only whatever overlap remains; the
+                // measured frame below doesn't move with this padding, so it can't stack up.
+                Theme.paper.frame(height: keyboardOverlap)
+            }
+            .background(GeometryReader { proxy in
+                Color.clear
+                    .onAppear { contentBottom = proxy.frame(in: .global).maxY }
+                    .onChange(of: proxy.frame(in: .global).maxY) { _, bottom in contentBottom = bottom }
+            })
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                keyboardTop = frame.minY >= UIScreen.main.bounds.height ? nil : frame.minY
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardTop = nil
             }
             .navigationTitle(agent.map(title) ?? "Agent")
             .navigationBarTitleDisplayMode(.inline)
@@ -93,9 +123,29 @@ struct AgentDetailView: View {
                 }
             }
             .task { await reload() }
+            #if DEBUG
+            .task {
+                if ProcessInfo.processInfo.arguments.contains("-focusPrompt") {
+                    try? await Task.sleep(for: .seconds(1))
+                    promptFocused = true
+                }
+            }
+            #endif
             .task(id: agent?.agentStatus) {
+                // A question or approval reads best as the agent draws it: show the terminal.
+                if agent?.agentStatus == .blocked { mode = .terminal }
                 // Re-read when the state changes (e.g. the agent finishes a turn).
-                if columns > 0 { await reload() }
+                if columns > 0 || !transcript.items.isEmpty { await reload() }
+            }
+            .task(id: mode) {
+                if mode == .terminal, columns == 0 { await reloadTerminal() }
+                // Follow the conversation live; reads are incremental, so this stays cheap.
+                while !Task.isCancelled, showsChat {
+                    let active = agent?.agentStatus == .working || agent?.agentStatus == .blocked
+                    try? await Task.sleep(for: active ? .seconds(2) : .seconds(6))
+                    guard !Task.isCancelled else { return }
+                    await reloadChat(quiet: true)
+                }
             }
         }
     }
@@ -159,6 +209,52 @@ struct AgentDetailView: View {
         }
     }
 
+    private var keyboardOverlap: CGFloat {
+        guard let keyboardTop else { return 0 }
+        return max(0, contentBottom - keyboardTop)
+    }
+
+    private var showsChat: Bool {
+        mode == .chat && chatAvailable && canChat
+    }
+
+    private var canChat: Bool { agent?.hasTranscript == true }
+
+    /// Another agent shares the folder, so "newest transcript there" can't be trusted;
+    /// only exact lookups (integration or the pane's process) are used.
+    private var isAmbiguous: Bool {
+        guard let agent, agent.hasTranscript else { return false }
+        return session.snapshot?.transcriptIsAmbiguous(for: agent) == true
+    }
+
+    private var terminalOutput: some View {
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                // Lines keep the pane's own wrapping so rules and boxes line up;
+                // scroll sideways if they don't fit even at the smallest size.
+                ScrollView([.vertical, .horizontal]) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(output)
+                            .font(.system(size: fontSize(fitting: geometry.size.width), design: .monospaced))
+                            .fixedSize()
+                            .textSelection(.enabled)
+                            .padding(10)
+                        Color.clear.frame(height: 1).id("bottom")
+                    }
+                    .frame(minWidth: geometry.size.width, alignment: .leading)
+                }
+                .background(TerminalPalette.background)
+                .foregroundStyle(TerminalPalette.foreground)
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .updating($pinch) { value, state, _ in state = value.magnification }
+                        .onEnded { value in zoom = min(max(zoom * value.magnification, 0.25), 4) }
+                )
+                .onChange(of: output) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+        }
+    }
+
     private func title(_ agent: AgentInfo) -> String {
         session.snapshot?.displayName(for: agent) ?? agent.displayName
     }
@@ -202,6 +298,38 @@ struct AgentDetailView: View {
     }
 
     private func reload() async {
+        if showsChat {
+            await reloadChat(quiet: false)
+        }
+        if !showsChat {
+            await reloadTerminal()
+        }
+    }
+
+    /// Pulls new transcript lines; falls back to the terminal view if there's no usable transcript.
+    private func reloadChat(quiet: Bool) async {
+        guard let agent, let remote = session.herdr else { return }
+        let known = transcriptPath.map { ($0, transcriptSize) }
+        do {
+            guard let chunk = try await remote.readTranscript(agent, allowFolderGuess: !isAmbiguous, known: known) else {
+                if transcript.items.isEmpty { chatAvailable = false }
+                return
+            }
+            if !chunk.isIncremental || chunk.path != transcriptPath {
+                // New file (e.g. after /clear) or first read: start over.
+                transcript = ClaudeTranscript()
+            }
+            transcript.ingest(chunk.body)
+            transcriptPath = chunk.path
+            transcriptSize = chunk.consumed
+            if transcript.items.isEmpty { chatAvailable = false }
+        } catch {
+            if !quiet { self.error = error.localizedDescription }
+        }
+        if !chatAvailable { await reloadTerminal() }
+    }
+
+    private func reloadTerminal() async {
         guard let agent else { return }
         await run { remote in
             // `recent` keeps the pane's line breaks; `ansi` keeps its colors.
