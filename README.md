@@ -18,9 +18,7 @@ or tmux on your server, see what every Claude Code or Codex agent is doing,
 and get a notification the moment one needs you.
 
 <p align="center">
-  <img src="docs/agents.png" width="300" alt="Agents tab listing four agents on a server, with one blocked waiting for approval">
-  &nbsp;&nbsp;
-  <img src="docs/chat.png" width="300" alt="A Claude Code session shown as a chat, with collapsed tool calls, a code block and a prompt box">
+  <img src="docs/screenshots.png" alt="Three Shello screens: a herdr terminal with GPU monitoring, the Agents inbox with one agent blocked, and a Claude Code session as a chat">
 </p>
 
 ## Features

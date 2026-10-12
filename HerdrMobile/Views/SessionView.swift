@@ -93,7 +93,7 @@ struct SessionView: View {
             session.isVisible = true
             #if DEBUG
             if ReadmeDemo.isOn {
-                tab = .agents
+                if !ProcessInfo.processInfo.arguments.contains("-demoTerminal") { tab = .agents }
                 return
             }
             #endif
