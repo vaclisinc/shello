@@ -10,12 +10,12 @@
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
 </p>
 
-<p align="center"><b>Say hello to your terminal.</b></p>
+<p align="center"><b>Say hello to your agents and your terminal, anytime.</b></p>
 
-Shello is an SSH terminal for iPhone, built for keeping an eye on your
-coding agents. It opens [herdr](https://github.com/ogulcancelik/herdr) on
-your server, lists every Claude Code, Codex or other agent it runs, and lets
-you read and answer them from your phone.
+Shello is an SSH client for iPhone that keeps your sessions alive and your
+coding agents within reach. Attach to [herdr](https://github.com/ogulcancelik/herdr)
+or tmux on your server, see what every Claude Code or Codex agent is doing,
+and get a notification the moment one needs you.
 
 <p align="center">
   <img src="docs/agents.png" width="300" alt="Agents tab listing four agents on a server, with one blocked waiting for approval">
@@ -25,24 +25,38 @@ you read and answer them from your phone.
 
 ## Features
 
+### SSH terminal
+
 - A full terminal ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)):
   xterm-256color, mouse, pinch to zoom, and a key bar with `esc`, sticky
   `⇧` / `ctrl` / `alt`, `⇧tab`, arrows and paste. Key combos use the kitty
   keyboard protocol, so Shift+Enter reaches Claude Code.
-- An Agents inbox, sorted by urgency: blocked, done, working, idle.
-- Claude Code sessions read as a chat, with Markdown, images and collapsed
-  tool calls. Approve, pick an option, interrupt or send a prompt without
-  opening the terminal.
-- Notifications when an agent is waiting for you or finishes. Tapping one
-  opens the terminal on that agent's pane.
-- A Live Activity on the Lock Screen and in the Dynamic Island.
-- Sessions survive disconnects: herdr keeps running on the server, and
-  Shello reconnects and reattaches when you come back.
-- Can also attach tmux, start a plain shell or run your own command
-  instead of herdr.
 - Ed25519 keys generated on the device, or imported OpenSSH keys (ed25519 /
   RSA, with passphrase). Keys and passwords stay in the iOS Keychain.
   Host keys are pinned on first connect.
+
+### Persistent sessions with herdr and tmux
+
+- Each host starts herdr, attaches tmux, opens a plain shell or runs your
+  own command.
+- Your work keeps running on the server. When the network drops or iOS
+  closes the app, Shello reconnects and reattaches to the same session.
+
+### AI agent monitoring
+
+- An Agents inbox for every agent herdr runs (Claude Code, Codex and
+  others), sorted by urgency: blocked, done, working, idle.
+- Claude Code sessions read as a chat, with Markdown, images and collapsed
+  tool calls.
+- Approve, pick an option, interrupt or send a prompt without opening the
+  terminal.
+
+### Notifications
+
+- A notification when an agent is waiting for you or finishes. Tapping it
+  opens the terminal on that agent's pane.
+- A Live Activity on the Lock Screen and in the Dynamic Island shows how
+  many agents are working or waiting.
 
 ## Server setup
 
