@@ -308,6 +308,12 @@ struct AgentDetailView: View {
 
     /// Pulls new transcript lines; falls back to the terminal view if there's no usable transcript.
     private func reloadChat(quiet: Bool) async {
+        #if DEBUG
+        if ReadmeDemo.isOn {
+            transcript = ReadmeDemo.transcript
+            return
+        }
+        #endif
         guard let agent, let remote = session.herdr else { return }
         let known = transcriptPath.map { ($0, transcriptSize) }
         do {

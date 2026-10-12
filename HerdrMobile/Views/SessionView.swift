@@ -91,6 +91,12 @@ struct SessionView: View {
         .onChange(of: keepAlive) { _, _ in app.updateBackgroundKeepAlive() }
         .onAppear {
             session.isVisible = true
+            #if DEBUG
+            if ReadmeDemo.isOn {
+                tab = .agents
+                return
+            }
+            #endif
             if !didShowTips { showingTips = true }
         }
         .onDisappear { session.isVisible = false }

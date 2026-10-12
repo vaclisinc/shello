@@ -14,6 +14,8 @@ enum Theme {
     static let sky = Color(hex: 0x6FC2FF)
     static let coral = Color(hex: 0xFF7169)
     static let mint = Color(hex: 0x38C98B)
+    /// Coral washed into the card color; opaque so the hard shadow doesn't show through.
+    static let coralTint = dynamic(light: 0xFFE2DD, dark: 0x4A302F)
     /// Text on yellow/sky/coral fills, which stay light in both modes.
     static let onAccent = Color(hex: 0x1E1E1E)
 

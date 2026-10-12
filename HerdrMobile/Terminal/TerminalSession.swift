@@ -84,6 +84,12 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     func connect() {
         guard !state.isLive, let app else { return }
+        #if DEBUG
+        if ReadmeDemo.isOn {
+            state = .connected
+            return
+        }
+        #endif
         wantsConnection = true
         app.updateBackgroundKeepAlive()
         state = .connecting

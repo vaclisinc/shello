@@ -56,6 +56,11 @@ struct AgentsView: View {
         .listStyle(.plain)
         .paperScreen()
         .refreshable { await session.refreshAgents() }
+        #if DEBUG
+        .onAppear {
+            if ReadmeDemo.opensChat { selected = session.snapshot?.agentsByUrgency.first { $0.agentStatus == .working } }
+        }
+        #endif
         .sheet(item: $selected) { agent in
             AgentDetailView(session: session, agentID: agent.id) {
                 selected = nil
@@ -108,7 +113,7 @@ struct AgentRow: View {
             }
         }
         .padding(14)
-        .card(fill: agent.agentStatus == .blocked ? Theme.coral.opacity(0.18) : Theme.card)
+        .card(fill: agent.agentStatus == .blocked ? Theme.coralTint : Theme.card)
     }
 }
 
