@@ -59,8 +59,10 @@ final class KeyBar: UIInputView {
         Key(title: "end", action: .key(.end)),
         Key(title: "pgup", action: .key(.pageUp)),
         Key(title: "pgdn", action: .key(.pageDown)),
-        Key(title: "", symbol: "keyboard.chevron.compact.down", action: .dismiss),
     ]
+
+    /// Pinned at the right edge, outside the scrolling keys, so it's always in reach.
+    private let dismissKey = Key(title: "", symbol: "keyboard.chevron.compact.down", action: .dismiss)
 
     init(terminal: TerminalView) {
         self.terminal = terminal
@@ -96,9 +98,16 @@ final class KeyBar: UIInputView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(stack)
 
+        let dismiss = makeButton(dismissKey)
+        dismiss.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(dismiss)
+
         NSLayoutConstraint.activate([
+            dismiss.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            dismiss.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            dismiss.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: dismiss.leadingAnchor, constant: -2),
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 8),
@@ -109,35 +118,39 @@ final class KeyBar: UIInputView {
         ])
 
         for key in keys {
-            var config = UIButton.Configuration.filled()
-            config.cornerStyle = .fixed
-            config.background.cornerRadius = 2
-            config.contentInsets = NSDirectionalEdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
-            Self.applyOff(&config)
-            if let symbol = key.symbol {
-                config.image = UIImage(systemName: symbol)
-                // Set on the configuration: the filled style otherwise scales symbols up.
-                config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
-            } else {
-                var title = AttributedString(key.title)
-                title.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
-                config.attributedTitle = title
-            }
-            let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                self?.perform(key)
-            })
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
-            // Keys size to their label; otherwise spare width lands on arbitrary keys.
-            button.setContentHuggingPriority(.required, for: .horizontal)
-            button.setContentCompressionResistancePriority(.required, for: .horizontal)
-            button.accessibilityLabel = key.symbol ?? key.title
-            switch key.action {
-            case .shift, .ctrl, .alt: modifierButtons[key.title] = button
-            default: break
-            }
-            stack.addArrangedSubview(button)
+            stack.addArrangedSubview(makeButton(key))
         }
+    }
+
+    private func makeButton(_ key: Key) -> UIButton {
+        var config = UIButton.Configuration.filled()
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = 2
+        config.contentInsets = NSDirectionalEdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
+        Self.applyOff(&config)
+        if let symbol = key.symbol {
+            config.image = UIImage(systemName: symbol)
+            // Set on the configuration: the filled style otherwise scales symbols up.
+            config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        } else {
+            var title = AttributedString(key.title)
+            title.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
+            config.attributedTitle = title
+        }
+        let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            self?.perform(key)
+        })
+        button.widthAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
+        // Keys size to their label; otherwise spare width lands on arbitrary keys.
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        button.accessibilityLabel = key.symbol ?? key.title
+        switch key.action {
+        case .shift, .ctrl, .alt: modifierButtons[key.title] = button
+        default: break
+        }
+        return button
     }
 
     // MARK: Actions

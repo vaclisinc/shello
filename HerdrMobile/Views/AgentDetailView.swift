@@ -195,6 +195,15 @@ struct AgentDetailView: View {
                         .lineLimit(1...6)
                         .field()
                         .focused($promptFocused)
+                    if promptFocused {
+                        Button {
+                            promptFocused = false
+                        } label: {
+                            Image(systemName: "keyboard.chevron.compact.down").font(.system(size: 15, weight: .bold))
+                        }
+                        .buttonStyle(BlockButtonStyle(fill: Theme.card, foreground: Theme.ink, compact: true))
+                        .accessibilityLabel("Hide keyboard")
+                    }
                     Button {
                         send(agent)
                     } label: {
