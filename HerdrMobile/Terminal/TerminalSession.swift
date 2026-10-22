@@ -60,6 +60,8 @@ final class TerminalSession: ObservableObject, Identifiable {
     private weak var app: AppModel?
     private(set) var connection: SSHConnection?
     private var shellTask: Task<Void, Never>?
+    /// Bumped on every connect and teardown, so a superseded attempt can't touch the current one.
+    private var attempt = 0
     private var monitorTask: Task<Void, Never>?
     private var input: AsyncStream<Input>.Continuation?
     private var cols = 80
@@ -84,6 +86,8 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     func connect() {
         guard !state.isLive, let app else { return }
+        // Don't leave the previous attempt (and its herdr client) running on the server.
+        teardown()
         #if DEBUG
         if ReadmeDemo.isOn {
             state = .connected
@@ -102,19 +106,20 @@ final class TerminalSession: ObservableObject, Identifiable {
         let confirm: TOFUHostKeyValidator.Confirm = { [weak app] challenge in
             await app?.confirmHostKey(challenge) ?? false
         }
+        let attempt = self.attempt
         shellTask = Task { [weak self] in
-            await self?.establish(knownHosts: knownHosts, confirm: confirm)
+            await self?.establish(attempt: attempt, knownHosts: knownHosts, confirm: confirm)
         }
     }
 
-    private func establish(knownHosts: KnownHostsStore, confirm: @escaping TOFUHostKeyValidator.Confirm) async {
+    private func establish(attempt: Int, knownHosts: KnownHostsStore, confirm: @escaping TOFUHostKeyValidator.Confirm) async {
         do {
             let connection = try await SSHConnection.connect(
                 profile: profile,
                 knownHosts: knownHosts,
                 confirmHostKey: confirm
             )
-            guard !Task.isCancelled else {
+            guard !Task.isCancelled, attempt == self.attempt else {
                 await connection.close()
                 return
             }
@@ -122,40 +127,48 @@ final class TerminalSession: ObservableObject, Identifiable {
             state = .connected
             startMonitor()
             try await runShell(on: connection)
-            finish(nil)
+            finish(nil, attempt: attempt)
         } catch is CancellationError {
-            finish(nil)
+            finish(nil, attempt: attempt)
         } catch {
-            finish(error.localizedDescription)
+            finish(error.localizedDescription, attempt: attempt)
         }
     }
 
     func disconnect() {
         wantsConnection = false
         app?.updateBackgroundKeepAlive()
-        shellTask?.cancel()
-        monitorTask?.cancel()
-        let connection = self.connection
-        Task { await connection?.close() }
-        finish(nil)
+        finish(nil, attempt: attempt)
     }
 
     func reconnectIfNeeded() {
         guard wantsConnection else { return }
         if case .disconnected = state { connect() }
         if state == .connected, connection?.isConnected == false {
-            finish("Connection lost")
+            finish("Connection lost", attempt: attempt)
             connect()
         }
     }
 
-    private func finish(_ error: String?) {
-        guard state.isLive else { return }
+    /// Stops the current attempt for good: its shell, poller and SSH connection.
+    private func teardown() {
+        attempt += 1
+        shellTask?.cancel()
+        shellTask = nil
         monitorTask?.cancel()
         monitorTask = nil
         input?.finish()
         input = nil
+        if let connection {
+            Task { await connection.close() }
+        }
         connection = nil
+    }
+
+    /// Ignored when `attempt` was superseded, so a stale shell ending can't kill a newer connection.
+    private func finish(_ error: String?, attempt: Int) {
+        guard attempt == self.attempt, state.isLive else { return }
+        teardown()
         state = .disconnected(error)
         // Kept alive in the background (e.g. the network changed): retry instead of waiting for the foreground.
         if wantsConnection, error != nil, UIApplication.shared.applicationState == .background, BackgroundLocation.isEnabled {
