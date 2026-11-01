@@ -20,11 +20,11 @@ private enum Palette {
 struct ConnectionActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ShelloActivityAttributes.self) { context in
-            LockScreenView(state: context.state)
+            LockScreenView(state: context.shown, title: context.title, stale: context.isStale)
                 .activityBackgroundTint(Color.black.opacity(0.35))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
-            let state = context.state
+            let state = context.shown
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Prompt().padding(.leading, 6)
@@ -33,10 +33,10 @@ struct ConnectionActivity: Widget {
                     Counts(state: state).padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(state.title).font(.headline)
+                    Text(context.title).font(.headline)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HostRows(hosts: state.hosts, limit: 3).padding(.top, 4)
+                    HostRows(hosts: state.hosts, limit: 3, stale: context.isStale).padding(.top, 4)
                 }
             } compactLeading: {
                 Prompt()
@@ -56,6 +56,17 @@ struct ConnectionActivity: Widget {
             .keylineTint(Palette.yellow)
         }
     }
+}
+
+private extension ActivityViewContext where Attributes == ShelloActivityAttributes {
+    /// Past its stale date the app stopped updating (suspended or killed), so the last
+    /// counts and connections are no longer true: show the hosts as unwatched.
+    var shown: ShelloActivityAttributes.ContentState {
+        guard isStale else { return state }
+        return .init(hosts: state.hosts.map { .init(name: $0.name, connected: false, working: 0, waiting: 0) })
+    }
+
+    var title: String { isStale ? "Not monitoring" : state.title }
 }
 
 /// The `>_` mark from the app icon.
@@ -87,6 +98,7 @@ private struct Counts: View {
 private struct HostRows: View {
     let hosts: [ShelloActivityAttributes.Host]
     let limit: Int
+    var stale = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -102,7 +114,7 @@ private struct HostRows: View {
                     } else if host.working > 0 {
                         Text("\(host.working) working").font(.caption.bold()).foregroundStyle(Palette.sky)
                     } else if !host.connected {
-                        Text("reconnecting").font(.caption).foregroundStyle(.secondary)
+                        Text(stale ? "open Shello" : "reconnecting").font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -115,6 +127,8 @@ private struct HostRows: View {
 
 private struct LockScreenView: View {
     let state: ShelloActivityAttributes.ContentState
+    let title: String
+    let stale: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -125,11 +139,11 @@ private struct LockScreenView: View {
                     .frame(width: 30, height: 30)
                     .background(Palette.yellow)
                     .overlay(Rectangle().strokeBorder(.white.opacity(0.8), lineWidth: 1.5))
-                Text(state.title).font(.headline)
+                Text(title).font(.headline)
                 Spacer()
                 Counts(state: state)
             }
-            HostRows(hosts: state.hosts, limit: 4)
+            HostRows(hosts: state.hosts, limit: 4, stale: stale)
         }
         .foregroundStyle(.white)
         .padding(16)
