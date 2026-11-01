@@ -8,6 +8,7 @@ struct SessionView: View {
     @AppStorage("didShowTerminalTips.v2") private var didShowTips = false
     @State private var showingTips = false
     @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(BackgroundLocation.enabledKey) private var keepAlive = false
     @State private var tab: Tab = .terminal
 
@@ -71,7 +72,11 @@ struct SessionView: View {
                         }
                     }
                     if session.state.isLive {
-                        Button(role: .destructive) { session.disconnect() } label: {
+                        Button(role: .destructive) {
+                            // Same as Disconnect in the host list: drop the session and go back to it.
+                            dismiss()
+                            app.close(session.profile)
+                        } label: {
                             Label("Disconnect", systemImage: "xmark.circle")
                         }
                     } else {
