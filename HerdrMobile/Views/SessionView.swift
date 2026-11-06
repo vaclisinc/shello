@@ -36,7 +36,9 @@ struct SessionView: View {
                 if tab == .agents {
                     AgentsView(session: session) { tab = .terminal }
                 }
-                if case .disconnected(let error) = session.state {
+                // A clean end goes straight back to the host list (see onChange below);
+                // only a dropped connection offers to reconnect here.
+                if case .disconnected(let error?) = session.state {
                     DisconnectedBanner(error: error) { session.connect() }
                 }
                 if showingTips && tab == .terminal {
@@ -94,6 +96,12 @@ struct SessionView: View {
             await session.focusRequestedAgent()
         }
         .onChange(of: keepAlive) { _, _ in app.updateBackgroundKeepAlive() }
+        // Disconnected on purpose or the shell exited: back to the host list, like Disconnect there.
+        .onChange(of: session.state) { _, state in
+            guard case .disconnected(nil) = state else { return }
+            dismiss()
+            app.close(session.profile)
+        }
         .onAppear {
             session.isVisible = true
             #if DEBUG
@@ -168,14 +176,14 @@ private struct TerminalTips: View {
 }
 
 private struct DisconnectedBanner: View {
-    let error: String?
+    let error: String
     let reconnect: () -> Void
 
     var body: some View {
         VStack {
             Spacer()
             VStack(spacing: 12) {
-                Text((error ?? "Disconnected").uppercased())
+                Text(error.uppercased())
                     .font(Theme.mono(13, .heavy))
                     .foregroundStyle(Theme.ink)
                     .multilineTextAlignment(.center)
