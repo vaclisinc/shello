@@ -6,7 +6,7 @@ import UIKit
 /// produce (Shift+Tab, Shift+Enter, Ctrl/Alt chords, arrows), plus herdr shortcuts.
 ///
 /// Modifiers are sticky: tap once to apply to the next key, double-tap to lock.
-/// Ctrl and Alt also apply to letters typed on the software keyboard.
+/// They also apply to letters typed on the software keyboard (shift via `applyShift`).
 final class KeyBar: UIInputView {
     private enum ModifierState { case off, once, locked }
 
@@ -16,6 +16,8 @@ final class KeyBar: UIInputView {
     private var alt: ModifierState = .off
     private var lastTap: (title: String, time: Date)?
     private var modifierButtons: [String: UIButton] = [:]
+    /// True while the bar itself is writing to the terminal, so `applyShift` leaves it alone.
+    private var isSendingFromBar = false
 
     private enum Action {
         case key(TerminalKey)
@@ -171,7 +173,7 @@ final class KeyBar: UIInputView {
         case .combo(let terminalKey, let extra):
             send(terminalKey, extra: extra)
         case .raw(let bytes):
-            terminal?.send(data: bytes[...])
+            sendFromBar(bytes)
             consumeOneShotModifiers()
         case .paste:
             paste()
@@ -209,8 +211,26 @@ final class KeyBar: UIInputView {
             kitty: !state.keyboardEnhancementFlags.isEmpty,
             applicationCursor: state.applicationCursor
         )
-        terminal.send(data: bytes[...])
+        sendFromBar(bytes)
         consumeOneShotModifiers()
+    }
+
+    private func sendFromBar(_ bytes: [UInt8]) {
+        isSendingFromBar = true
+        defer { isSendingFromBar = false }
+        terminal?.send(data: bytes[...])
+    }
+
+    /// Shift armed in the bar, then a letter typed on the software keyboard: send it
+    /// upper-cased (e.g. ^B, shift, n → `N`). SwiftTerm only knows about ctrl and alt.
+    func applyShift(to data: ArraySlice<UInt8>) -> ArraySlice<UInt8> {
+        guard shift != .off, !isSendingFromBar else { return data }
+        let shifted = data.map { (0x61...0x7a).contains($0) ? $0 - 0x20 : $0 }
+        if shift == .once {
+            shift = .off
+            refreshModifiers()
+        }
+        return shifted[...]
     }
 
     private func consumeOneShotModifiers() {
@@ -276,9 +296,9 @@ final class KeyBar: UIInputView {
     private func paste() {
         guard let terminal, let text = UIPasteboard.general.string, !text.isEmpty else { return }
         if terminal.getTerminal().bracketedPasteMode {
-            terminal.send(data: ([0x1b, 0x5b, 0x32, 0x30, 0x30, 0x7e] + Array(text.utf8) + [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e])[...])
+            sendFromBar([0x1b, 0x5b, 0x32, 0x30, 0x30, 0x7e] + Array(text.utf8) + [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e])
         } else {
-            terminal.send(data: Array(text.utf8)[...])
+            sendFromBar(Array(text.utf8))
         }
     }
 }

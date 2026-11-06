@@ -86,7 +86,10 @@ struct TerminalHostView: UIViewRepresentable {
         }
 
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
-            MainActor.assumeIsolated { session.send(Array(data)) }
+            MainActor.assumeIsolated {
+                let typed = (source.inputAccessoryView as? KeyBar)?.applyShift(to: data) ?? data
+                session.send(Array(typed))
+            }
         }
 
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
