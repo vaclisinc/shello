@@ -149,7 +149,7 @@ private struct TerminalTips: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("HELLO, TERMINAL").font(Theme.mono(18, .heavy)).foregroundStyle(Theme.ink)
                 tip("arrow.up.left.and.arrow.down.right", "Pinch with two fingers to make the text bigger or smaller.")
-                tip("hand.draw", "Swipe the key bar above the keyboard left and right for esc, ctrl, alt, ⇧tab, arrows and other keys the phone keyboard can't type.")
+                tip("hand.draw", "Swipe the key bar above the keyboard left and right for esc, shift, ctrl, alt, ⇧tab, arrows and other keys the phone keyboard can't type.")
                 tip("location", "Want agent notifications while Shello is in the background? Turn on “Stay Connected in Background” in the ⋯ menu. iOS will ask for location access: it's only used to keep the app awake (coarse, no GPS, never stored), and costs some battery.")
                 tip("ellipsis.circle", "Find these tips again in the ⋯ menu.")
                 Button("Got it", action: dismiss)

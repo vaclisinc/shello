@@ -35,7 +35,7 @@ final class KeyBar: UIInputView {
     // Most-used first: esc, shift, ^C and paste are reachable without scrolling.
     private let keys: [Key] = [
         Key(title: "esc", action: .key(.escape)),
-        Key(title: "⇧", action: .shift),
+        Key(title: "shift", action: .shift),
         Key(title: "^C", action: .raw([0x03])),
         Key(title: "paste", action: .paste),
         Key(title: "ctrl", action: .ctrl),
@@ -239,7 +239,7 @@ final class KeyBar: UIInputView {
             if terminal.controlModifier != (ctrl != .off) { terminal.controlModifier = ctrl != .off }
             if terminal.metaModifier != (alt != .off) { terminal.metaModifier = alt != .off }
         }
-        style(modifierButtons["⇧"], shift)
+        style(modifierButtons["shift"], shift)
         style(modifierButtons["ctrl"], ctrl)
         style(modifierButtons["alt"], alt)
     }
