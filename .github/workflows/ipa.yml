@@ -1,0 +1,66 @@
+name: IPA
+
+# Builds an unsigned Shello.ipa for sideloading with AltStore, which signs it
+# with your own Apple ID on install. Run it by pushing a tag named ipa-*, or
+# from the Actions tab (Run workflow). The newest build is always at
+# https://github.com/vaclisinc/shello/releases/latest/download/Shello.ipa
+
+on:
+  push:
+    tags: ['ipa-*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Archive without signing
+        run: |
+          set -o pipefail
+          xcodebuild archive -quiet \
+            -project HerdrMobile.xcodeproj \
+            -scheme HerdrMobile \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Shello.xcarchive \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | grep -v -E "^(warning: |.*: warning: )" | grep -v "^$" | cut -c1-600 | head -400
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          app=$(find build/Shello.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$app"
+          mkdir -p build/Payload
+          cp -R "$app" build/Payload/
+          (cd build && zip -qry Shello.ipa Payload)
+          ls -l build/Shello.ipa
+          ls "$app/PlugIns" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shello-ipa
+          path: build/Shello.ipa
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="ipa-$(date -u +%Y%m%d-%H%M)"
+          fi
+          gh release create "$tag" build/Shello.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Shello $tag" \
+            --notes "Unsigned build of ${GITHUB_SHA::7} for sideloading with AltStore."
